@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import { format, differenceInCalendarDays } from "date-fns";
 import { toast } from "sonner";
 import {
-    deleteAssignment,
     generatePlan,
+    getTasks,
+    updateTaskStatus,
     type GeneratePlanResponse,
+    type TaskResponse,
 } from "@/lib/api";
 import { removeAssignment } from "@/app/dashboard/actions";
 import { Button } from "@/components/ui/button";
@@ -56,14 +57,34 @@ function getDeadlineInfo(deadline: string) {
 }
 
 export function AssignmentCard({ assignment }: AssignmentCardProps) {
-    const router = useRouter();
     const [expanded, setExpanded] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [generating, setGenerating] = useState(false);
     const [plan, setPlan] = useState<GeneratePlanResponse | null>(null);
+    const [tasks, setTasks] = useState<TaskResponse[]>([]);
+    const [loadingTasks, setLoadingTasks] = useState(false);
+    const [tasksLoaded, setTasksLoaded] = useState(false);
 
     const deadlineDate = new Date(assignment.deadline + "T00:00:00");
     const { color, label } = getDeadlineInfo(assignment.deadline);
+
+    const doneCount = tasks.filter((t) => t.status === "done").length;
+
+    // Load tasks from DB when card is expanded
+    useEffect(() => {
+        if (expanded && !tasksLoaded) {
+            setLoadingTasks(true);
+            getTasks(assignment.id)
+                .then((data) => {
+                    setTasks(data);
+                    setTasksLoaded(true);
+                })
+                .catch(() => {
+                    // silently fail — tasks just won't show
+                })
+                .finally(() => setLoadingTasks(false));
+        }
+    }, [expanded, tasksLoaded, assignment.id]);
 
     async function handleDelete(e: React.MouseEvent) {
         e.stopPropagation();
@@ -91,12 +112,42 @@ export function AssignmentCard({ assignment }: AssignmentCardProps) {
                 deadline: assignment.deadline,
             });
             setPlan(result);
+
+            // Reload tasks from DB since generate-plan now saves them
+            const freshTasks = await getTasks(assignment.id);
+            setTasks(freshTasks);
+            setTasksLoaded(true);
         } catch {
             toast.error("AI generation failed, try again");
         } finally {
             setGenerating(false);
         }
     }
+
+    async function handleToggleTask(task: TaskResponse) {
+        const newStatus = task.status === "done" ? "pending" : "done";
+
+        // Optimistic update
+        setTasks((prev) =>
+            prev.map((t) =>
+                t.id === task.id ? { ...t, status: newStatus } : t
+            )
+        );
+
+        try {
+            await updateTaskStatus(task.id, newStatus as "pending" | "done");
+        } catch {
+            // Revert on failure
+            setTasks((prev) =>
+                prev.map((t) =>
+                    t.id === task.id ? { ...t, status: task.status } : t
+                )
+            );
+            toast.error("Could not update task");
+        }
+    }
+
+    const hasTasks = tasks.length > 0;
 
     return (
         <div className="group relative w-full rounded-xl border border-border bg-card p-6 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
@@ -187,10 +238,134 @@ export function AssignmentCard({ assignment }: AssignmentCardProps) {
             {/* Expanded area */}
             {expanded && (
                 <div className="mt-4 rounded-lg bg-secondary px-4 py-4 text-sm">
-                    {plan ? (
-                        /* AI plan result */
+                    {loadingTasks ? (
+                        <div className="flex items-center justify-center py-4">
+                            <svg
+                                className="h-5 w-5 animate-spin text-muted-foreground"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                            >
+                                <path d="M21 12a9 9 0 1 1-6.22-8.56" />
+                            </svg>
+                        </div>
+                    ) : hasTasks ? (
+                        /* Saved tasks from DB */
                         <div className="space-y-3">
-                            {/* Summary bar */}
+                            {/* Completion counter */}
+                            <div className="flex items-center justify-between text-xs">
+                                <span className="font-medium text-card-foreground">
+                                    {doneCount} / {tasks.length} tasks done
+                                </span>
+                                {assignment.difficulty_score && (
+                                    <span className="rounded-full bg-amber-accent/15 px-2.5 py-0.5 font-medium text-amber-accent">
+                                        Difficulty:{" "}
+                                        {assignment.difficulty_score}/10
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Progress bar */}
+                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
+                                <div
+                                    className="h-full rounded-full bg-amber-accent transition-all duration-300"
+                                    style={{
+                                        width: `${tasks.length > 0 ? (doneCount / tasks.length) * 100 : 0}%`,
+                                    }}
+                                />
+                            </div>
+
+                            {/* Task list */}
+                            <ul className="space-y-1.5">
+                                {tasks.map((task) => (
+                                    <li
+                                        key={task.id}
+                                        className="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2"
+                                    >
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleToggleTask(task);
+                                            }}
+                                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${task.status === "done"
+                                                    ? "border-amber-accent bg-amber-accent"
+                                                    : "border-input hover:border-amber-accent"
+                                                }`}
+                                        >
+                                            {task.status === "done" && (
+                                                <svg
+                                                    width="10"
+                                                    height="10"
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="white"
+                                                    strokeWidth="3"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                >
+                                                    <path d="M20 6 9 17l-5-5" />
+                                                </svg>
+                                            )}
+                                        </button>
+                                        <span
+                                            className={`flex-1 text-sm ${task.status === "done"
+                                                    ? "text-muted-foreground line-through"
+                                                    : "text-card-foreground"
+                                                }`}
+                                        >
+                                            {task.title}
+                                        </span>
+                                        <span className="shrink-0 text-xs text-muted-foreground">
+                                            {task.estimated_hours}h
+                                        </span>
+                                        {task.due_date && (
+                                            <span className="shrink-0 text-xs text-muted-foreground">
+                                                {format(
+                                                    new Date(
+                                                        task.due_date +
+                                                        "T00:00:00"
+                                                    ),
+                                                    "MMM d"
+                                                )}
+                                            </span>
+                                        )}
+                                    </li>
+                                ))}
+                            </ul>
+
+                            {/* Re-generate button */}
+                            <div className="flex justify-center pt-1">
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={handleGeneratePlan}
+                                    disabled={generating}
+                                    className="text-xs"
+                                >
+                                    {generating ? (
+                                        <span className="flex items-center gap-2">
+                                            <svg
+                                                className="h-3.5 w-3.5 animate-spin"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth="2"
+                                            >
+                                                <path d="M21 12a9 9 0 1 1-6.22-8.56" />
+                                            </svg>
+                                            Regenerating…
+                                        </span>
+                                    ) : (
+                                        "Regenerate Plan"
+                                    )}
+                                </Button>
+                            </div>
+                        </div>
+                    ) : plan ? (
+                        /* Just-generated plan (before tasks are saved — fallback) */
+                        <div className="space-y-3">
                             <div className="flex items-center gap-4 text-xs">
                                 <span className="rounded-full bg-amber-accent/15 px-2.5 py-0.5 font-medium text-amber-accent">
                                     Difficulty: {plan.difficulty_score}/10
@@ -199,13 +374,9 @@ export function AssignmentCard({ assignment }: AssignmentCardProps) {
                                     ~{plan.estimated_hours}h total
                                 </span>
                             </div>
-
-                            {/* Reasoning */}
                             <p className="text-xs italic text-muted-foreground">
                                 {plan.reasoning}
                             </p>
-
-                            {/* Subtasks list */}
                             <ul className="space-y-1.5">
                                 {plan.subtasks.map((task, i) => (
                                     <li
@@ -223,7 +394,7 @@ export function AssignmentCard({ assignment }: AssignmentCardProps) {
                             </ul>
                         </div>
                     ) : (
-                        /* Generate plan prompt */
+                        /* No tasks — generate plan prompt */
                         <div className="flex flex-col items-center gap-3 py-2">
                             <p className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <svg

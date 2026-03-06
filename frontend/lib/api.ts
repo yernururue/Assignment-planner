@@ -119,3 +119,40 @@ export async function generatePlan(
     }
     return res.json();
 }
+
+// ─── Task Types & Functions ────────────────────────────────
+
+export interface TaskResponse {
+    id: string;
+    assignment_id: string;
+    title: string;
+    due_date: string | null;
+    status: string;
+    estimated_hours: number | null;
+    order_index: number;
+}
+
+export async function getTasks(assignmentId: string): Promise<TaskResponse[]> {
+    const res = await fetch(`${BASE_URL}/assignments/${assignmentId}/tasks`);
+    if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(`Failed to fetch tasks: ${detail}`);
+    }
+    return res.json();
+}
+
+export async function updateTaskStatus(
+    taskId: string,
+    status: "pending" | "done"
+): Promise<TaskResponse> {
+    const res = await fetch(`${BASE_URL}/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+    });
+    if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(`Failed to update task status: ${detail}`);
+    }
+    return res.json();
+}
