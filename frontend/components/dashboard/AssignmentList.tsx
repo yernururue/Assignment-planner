@@ -1,3 +1,5 @@
+"use client";
+
 import { AssignmentCard } from "./AssignmentCard";
 
 interface Assignment {

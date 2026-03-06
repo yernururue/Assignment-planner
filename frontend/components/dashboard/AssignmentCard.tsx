@@ -28,19 +28,19 @@ function getDeadlineInfo(deadline: string) {
 
     if (daysRemaining < 0) {
         color = "text-red-500";
-        label = `${Math.abs(daysRemaining)}d overdue`;
+        label = `${Math.abs(daysRemaining)} days overdue`;
     } else if (daysRemaining === 0) {
         color = "text-red-500";
         label = "Due today";
     } else if (daysRemaining <= 2) {
         color = "text-red-500";
-        label = `in ${daysRemaining}d`;
+        label = `in ${daysRemaining} days`;
     } else if (daysRemaining <= 6) {
         color = "text-amber-accent";
-        label = `in ${daysRemaining}d`;
+        label = `in ${daysRemaining} days`;
     } else {
         color = "text-emerald-600 dark:text-emerald-400";
-        label = `in ${daysRemaining}d`;
+        label = `in ${daysRemaining} days`;
     }
 
     return { color, label, daysRemaining };
@@ -86,7 +86,7 @@ export function AssignmentCard({ assignment }: AssignmentCardProps) {
                     <path d="M8 2v4" />
                     <path d="M3 10h18" />
                 </svg>
-                {format(deadlineDate, "MMM d, yyyy")}
+                {format(deadlineDate, "MMM d")}
             </p>
 
             {/* Description preview */}
@@ -119,8 +119,7 @@ export function AssignmentCard({ assignment }: AssignmentCardProps) {
                             <path d="M18 12h4" />
                             <path d="m17.66 6.34-2.83 2.83" />
                         </svg>
-                        AI subtasks coming soon — this will show task breakdown once
-                        generated.
+                        No tasks yet — generate a plan
                     </p>
                 </div>
             )}
