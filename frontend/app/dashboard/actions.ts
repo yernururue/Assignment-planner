@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import {
+    createAssignment as apiCreateAssignment,
+    deleteAssignment as apiDeleteAssignment,
+} from "@/lib/api";
 
 export async function addAssignment(formData: FormData) {
     const supabase = await createClient();
@@ -26,15 +30,36 @@ export async function addAssignment(formData: FormData) {
         return { error: "Deadline is required" };
     }
 
-    const { error } = await supabase.from("assignments").insert({
-        user_id: user.id,
-        title: title.trim(),
-        description: description?.trim() || null,
-        deadline,
-    });
+    try {
+        await apiCreateAssignment({
+            user_id: user.id,
+            title: title.trim(),
+            description: description?.trim() || null,
+            deadline,
+        });
+    } catch {
+        return { error: "Could not connect to server" };
+    }
 
-    if (error) {
-        return { error: error.message };
+    revalidatePath("/dashboard");
+    return { success: true };
+}
+
+export async function removeAssignment(id: string) {
+    const supabase = await createClient();
+
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+        return { error: "Not authenticated" };
+    }
+
+    try {
+        await apiDeleteAssignment(id);
+    } catch {
+        return { error: "Could not connect to server" };
     }
 
     revalidatePath("/dashboard");
