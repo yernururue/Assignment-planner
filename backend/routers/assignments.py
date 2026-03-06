@@ -73,3 +73,17 @@ async def update_assignment(assignment_id: str, assignment: AssignmentUpdate):
             detail="Assignment not found",
         )
     return response.data[0]
+
+
+@router.get("/{assignment_id}/tasks")
+async def get_assignment_tasks(assignment_id: str):
+    """Fetch all tasks for an assignment, ordered by order_index."""
+    db = get_db()
+    response = (
+        db.table("tasks")
+        .select("*")
+        .eq("assignment_id", assignment_id)
+        .order("order_index", desc=False)
+        .execute()
+    )
+    return response.data

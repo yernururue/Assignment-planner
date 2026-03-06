@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import assignments, ai
+from routers import assignments, ai, tasks
 
 # FastAPI auto-generates interactive API docs at http://localhost:8000/docs
 app = FastAPI(
@@ -21,6 +21,7 @@ app.add_middleware(
 # Include routers
 app.include_router(assignments.router)
 app.include_router(ai.router)
+app.include_router(tasks.router)
 
 
 @app.get("/")

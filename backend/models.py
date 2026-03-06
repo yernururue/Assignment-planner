@@ -33,3 +33,17 @@ class GeneratePlanResponse(BaseModel):
     estimated_hours: float
     reasoning: str
     subtasks: list[SubTask]
+
+
+class TaskResponse(BaseModel):
+    id: str
+    assignment_id: str
+    title: str
+    due_date: Optional[str] = None
+    status: str
+    estimated_hours: Optional[float] = None
+    order_index: int
+
+
+class TaskStatusUpdate(BaseModel):
+    status: str  # "pending" or "done"
